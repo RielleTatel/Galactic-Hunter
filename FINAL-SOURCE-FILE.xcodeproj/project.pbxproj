@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D41B143D2DDB177200684FA2 /* libSDL2_image-2.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = D41B143B2DDB177200684FA2 /* libSDL2_image-2.0.0.dylib */; };
+		D41B143E2DDB177200684FA2 /* libSDL2-2.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = D41B143C2DDB177200684FA2 /* libSDL2-2.0.0.dylib */; };
+		D41B146E2DDC662700684FA2 /* libSDL2_ttf-2.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = D41B146D2DDC662700684FA2 /* libSDL2_ttf-2.0.0.dylib */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		D41B142E2DDB16BB00684FA2 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -20,6 +26,9 @@
 
 /* Begin PBXFileReference section */
 		D41B14302DDB16BB00684FA2 /* FINAL-SOURCE-FILE */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "FINAL-SOURCE-FILE"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D41B143B2DDB177200684FA2 /* libSDL2_image-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2_image-2.0.0.dylib"; path = "../../../../../opt/homebrew/Cellar/sdl2_image/2.8.8/lib/libSDL2_image-2.0.0.dylib"; sourceTree = "<group>"; };
+		D41B143C2DDB177200684FA2 /* libSDL2-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2-2.0.0.dylib"; path = "../../../../../opt/homebrew/Cellar/sdl2/2.32.6/lib/libSDL2-2.0.0.dylib"; sourceTree = "<group>"; };
+		D41B146D2DDC662700684FA2 /* libSDL2_ttf-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2_ttf-2.0.0.dylib"; path = "../../../../../opt/homebrew/Cellar/sdl2_ttf/2.24.0/lib/libSDL2_ttf-2.0.0.dylib"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -35,6 +44,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D41B146E2DDC662700684FA2 /* libSDL2_ttf-2.0.0.dylib in Frameworks */,
+				D41B143D2DDB177200684FA2 /* libSDL2_image-2.0.0.dylib in Frameworks */,
+				D41B143E2DDB177200684FA2 /* libSDL2-2.0.0.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -45,6 +57,7 @@
 			isa = PBXGroup;
 			children = (
 				D41B14322DDB16BB00684FA2 /* FINAL-SOURCE-FILE */,
+				D41B143A2DDB177200684FA2 /* Frameworks */,
 				D41B14312DDB16BB00684FA2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -55,6 +68,16 @@
 				D41B14302DDB16BB00684FA2 /* FINAL-SOURCE-FILE */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D41B143A2DDB177200684FA2 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D41B146D2DDC662700684FA2 /* libSDL2_ttf-2.0.0.dylib */,
+				D41B143B2DDB177200684FA2 /* libSDL2_image-2.0.0.dylib */,
+				D41B143C2DDB177200684FA2 /* libSDL2-2.0.0.dylib */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -245,6 +268,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				HEADER_SEARCH_PATHS = "/opt/homebrew/include/SDL2/**";
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/lib,
+					/opt/homebrew/Cellar/sdl2_image/2.8.8/lib,
+					/opt/homebrew/Cellar/sdl2/2.32.6/lib,
+					/opt/homebrew/Cellar/sdl2_ttf/2.24.0/lib,
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -253,6 +283,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				HEADER_SEARCH_PATHS = "/opt/homebrew/include/SDL2/**";
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/lib,
+					/opt/homebrew/Cellar/sdl2_image/2.8.8/lib,
+					/opt/homebrew/Cellar/sdl2/2.32.6/lib,
+					/opt/homebrew/Cellar/sdl2_ttf/2.24.0/lib,
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
