@@ -29,12 +29,26 @@ private:
     SDL_Window* window;
     SDL_Renderer* renderer;
     
-    //background variables
+    //background variable
     SDL_Texture* backgroundTexture;
     
     //Game text variable
+    TTF_Font* font;
+    
+    //current state variable
     GameState currentState;
-    TTF_Font* font; 
+    
+    // space ship sprite variable
+    SDL_Texture* playerTexture;
+
+    // cursor sprite variable
+    SDL_Texture* cursorTexture;
+
+        // Cursor position and velocity
+        float cursorX = 0.0f;
+        float cursorY = 0.0f;
+        float cursorVelX = 0.0f;
+        float cursorVelY = 0.0f;
 };
 
 #endif

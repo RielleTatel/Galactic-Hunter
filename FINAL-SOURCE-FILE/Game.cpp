@@ -14,6 +14,12 @@ Game::Game() {
     //For initializing the font and current state
     font = nullptr;
     currentState = GameState::MENU;
+    
+    //For initializing the space ship sprite variable
+    playerTexture = nullptr;
+    
+    //For initializing the cursor sprite variable
+    cursorTexture = nullptr;
 }
 
 Game::~Game() {}
@@ -65,6 +71,33 @@ void Game::init(const char* title, int xpos, int ypos, int width, int height, bo
         cout << "Failed to load font " << TTF_GetError() << endl;
     }
     
+    // Load space ship sprite
+    playerTexture = IMG_LoadTexture(renderer, "/Users/tatelgabrielle/Desktop/C++/FINAL-SOURCE-FILE/FINAL-SOURCE-FILE/assets/sprites/fighter.png");
+    if (!playerTexture) {
+        cout << "Failed to load player sprite: " << IMG_GetError() << endl;
+    }
+    
+    // Load cursor sprite with color keying for magenta background
+    SDL_Surface* cursorSurface = IMG_Load("/Users/tatelgabrielle/Desktop/C++/FINAL-SOURCE-FILE/FINAL-SOURCE-FILE/assets/sprites/cursor.png");
+    if (!cursorSurface) {
+        cout << "Failed to load cursor sprite: " << IMG_GetError() << endl;
+    } else {
+        SDL_SetColorKey(cursorSurface, SDL_TRUE, SDL_MapRGB(cursorSurface->format, 255, 0, 255));
+        cursorTexture = SDL_CreateTextureFromSurface(renderer, cursorSurface);
+        SDL_FreeSurface(cursorSurface);
+        if (!cursorTexture) {
+            cout << "Failed to create cursor texture: " << SDL_GetError() << endl;
+        }
+    }
+            // Set initial cursor position to center of window
+            int winW, winH;
+            SDL_GetWindowSize(window, &winW, &winH);
+            cursorX = (winW - 32) / 2.0f;
+            cursorY = (winH - 32) / 2.0f;
+            cursorVelX = 0.0f;
+            cursorVelY = 0.0f;
+
+    
 }
 
 void Game::handleEvents() {
@@ -80,12 +113,61 @@ void Game::handleEvents() {
                 cout << "Game Started! " << endl;
             }
         }
+        
+        // Handle cursor movement in PLAYING state
+        if (currentState == GameState::PLAYING) {
+            const float speed = 0.9f; // Increased speed for better responsiveness
+            if (event.type == SDL_KEYDOWN) {
+                switch (event.key.keysym.sym) {
+                    case SDLK_LEFT:
+                        cursorVelX = -speed;
+                        break;
+                    case SDLK_RIGHT:
+                        cursorVelX = speed;
+                        break;
+                    case SDLK_UP:
+                        cursorVelY = -speed;
+                        break;
+                    case SDLK_DOWN:
+                        cursorVelY = speed;
+                        break;
+                }
+            }
+            if (event.type == SDL_KEYUP) {
+                switch (event.key.keysym.sym) {
+                    case SDLK_LEFT:
+                        if (cursorVelX < 0) cursorVelX = 0;
+                        break;
+                    case SDLK_RIGHT:
+                        if (cursorVelX > 0) cursorVelX = 0;
+                        break;
+                    case SDLK_UP:
+                        if (cursorVelY < 0) cursorVelY = 0;
+                        break;
+                    case SDLK_DOWN:
+                        if (cursorVelY > 0) cursorVelY = 0;
+                        break;
+                }
+            }
+        }
     }
 }
 
 void Game::update() {
     if (currentState == GameState::PLAYING) {
-
+        // Update cursor position
+        cursorX += cursorVelX;
+        cursorY += cursorVelY;
+        
+        // Get window dimensions
+        int winW, winH;
+        SDL_GetWindowSize(window, &winW, &winH);
+        
+        // Keep cursor within window bounds
+        if (cursorX < 0) cursorX = 0;
+        if (cursorY < 0) cursorY = 0;
+        if (cursorX > winW - 32) cursorX = winW - 32;  // 32 is cursor width
+        if (cursorY > winH - 32) cursorY = winH - 32;  // 32 is cursor height
     }
 }
 
@@ -141,6 +223,46 @@ void Game::render() {
         }
     }
     
+    
+    //RENDER PlAYER SPRITE || SPACE SHIP
+      if (currentState == GameState::PLAYING && playerTexture) {
+      int winW, winH;
+      SDL_GetWindowSize(window, &winW, &winH);
+
+      int spriteW = 68; // width of your sprite
+      int spriteH = 68; // height of your sprite
+
+      SDL_Rect destRect;
+      destRect.w = spriteW;
+      destRect.h = spriteH;
+      destRect.x = (winW - spriteW) / 2;
+      destRect.y = winH - spriteH - 10; // 10px from bottom
+
+      SDL_RenderCopy(renderer, playerTexture, NULL, &destRect);
+  }
+
+  //RENDER CURSOR SPRITE
+  if (currentState == GameState::PLAYING && cursorTexture) {
+    int spriteW = 32; // width of one sprite
+    int spriteH = 32; // height of one sprite
+
+    // Source rectangle: middle sprite (orange)
+    SDL_Rect srcRect;
+    srcRect.x = 0;
+    srcRect.y = 32;
+    srcRect.w = spriteW;
+    srcRect.h = spriteH;
+
+    // Destination rectangle: use cursorX, cursorY
+    SDL_Rect destRect;
+    destRect.w = spriteW;
+    destRect.h = spriteH;
+    destRect.x = static_cast<int>(cursorX);
+    destRect.y = static_cast<int>(cursorY);
+
+    SDL_RenderCopy(renderer, cursorTexture, &srcRect, &destRect);
+  }
+    
     SDL_RenderPresent(renderer);
 }
 
@@ -163,5 +285,17 @@ void Game::clean() {
     SDL_DestroyRenderer(renderer);
     SDL_Quit();
     cout << "Game cleaned!" << endl;
+    
+    //CLEAN SPACE SHIP SPRITE
+    if (playerTexture) {
+      SDL_DestroyTexture(playerTexture);
+      playerTexture = nullptr;
+    }
+
+    //CLEAN CURSOR SPRITE
+    if (cursorTexture) {
+      SDL_DestroyTexture(cursorTexture);
+      cursorTexture = nullptr;
+    }
 }
 
