@@ -44,6 +44,14 @@ struct EnemyQueue {
     EnemyQueue() : head(nullptr), tail(nullptr), size(0) {}
 };
 
+struct ScoreNode {
+    std::string name;
+    int score;
+    ScoreNode* left;
+    ScoreNode* right;
+    ScoreNode(const std::string& n, int s) : name(n), score(s), left(nullptr), right(nullptr) {}
+};
+
 class Game {
 public:
     Game();
@@ -135,6 +143,16 @@ private:
     void updateEnemies(float deltaTime);
     void renderEnemies();
     void clearEnemies();
+
+    int score;
+    ScoreNode* scoreRoot;
+    void insertScore(ScoreNode*& root, const std::string& name, int score);
+    void displayScoresDescending(ScoreNode* root, int& count);
+    void clearScoreTree(ScoreNode* root);
+    void saveBSTToFile(const std::string& filename);
+    void loadBSTFromFile(const std::string& filename);
+    int countNodes(ScoreNode* root);
+    void removeLowestScore(ScoreNode*& root);
 };
 
 #endif

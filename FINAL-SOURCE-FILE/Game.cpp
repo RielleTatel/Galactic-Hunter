@@ -9,6 +9,8 @@
 #include <iomanip>
 #include <algorithm>
 #include <random>
+#include <fstream>
+#include <functional>
 
 using namespace std;
 
@@ -44,7 +46,12 @@ Game::Game() {
     // Initialize high scores
     isEnteringName = false;
     inputText = "";
-    loadHighScores();
+    score = 0;
+    scoreRoot = nullptr;
+    
+    // Load high scores first
+    std::cout << "Loading high scores at startup..." << std::endl;
+    loadBSTFromFile("highscores_bst.txt");
 
     // Initialize enemies
     minionTexture = nullptr;
@@ -188,13 +195,18 @@ void Game::handleEvents() {
         } else if (currentState == GameState::ENTER_NAME) {
             if (event.type == SDL_KEYDOWN) {
                 if (event.key.keysym.sym == SDLK_RETURN && !inputText.empty()) {
-                    // Save the score
-                    HighScore newScore = {inputText, GAME_DURATION - remainingTime};
-                    highScores.push_back(newScore);
-                    saveHighScores();
+                    // Save the score to BST
+                    insertScore(scoreRoot, inputText, score);
+                    score = 0;
                     currentState = GameState::MENU;
                     isEnteringName = false;
                     SDL_StopTextInput(); // Disable text input
+                    // Save only top 3 scores
+                    while (countNodes(scoreRoot) > 3) {
+                        removeLowestScore(scoreRoot);
+                    }
+                    saveBSTToFile("highscores_bst.txt");
+                    std::cout << "Saved new high score: " << inputText << " " << score << std::endl;
                 }
                 else if (event.key.keysym.sym == SDLK_BACKSPACE && !inputText.empty()) {
                     inputText.pop_back();
@@ -367,6 +379,16 @@ void Game::update() {
         }
         updateEnemies(deltaTime);
     }
+
+    // On game over, prompt for name entry if score > 0
+    if (currentState == GameState::GAME_OVER && score > 0 && !isEnteringName) {
+        currentState = GameState::ENTER_NAME;
+        isEnteringName = true;
+        inputText = "";
+        SDL_StartTextInput();
+        // Save scores when game ends
+        saveBSTToFile("highscores_bst.txt");
+    }
 }
 
 void Game::render() {
@@ -510,6 +532,25 @@ void Game::render() {
         renderEnemies();
     }
     
+    // Render current score
+    if (currentState == GameState::PLAYING) {
+        SDL_Color color = {255, 255, 0, 255};
+        std::stringstream ss;
+        ss << "Score: " << score;
+        SDL_Surface* textSurface = TTF_RenderText_Solid(smallFont, ss.str().c_str(), color);
+        if (textSurface) {
+            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+            SDL_Rect textRect = {10, 10, textSurface->w, textSurface->h};
+            SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+            SDL_DestroyTexture(textTexture);
+            SDL_FreeSurface(textSurface);
+        }
+    }
+
+    // Render top scores
+    int count = 0;
+    displayScoresDescending(scoreRoot, count);
+
     SDL_RenderPresent(renderer);
 }
 
@@ -553,23 +594,19 @@ void Game::renderHighScores() {
         SDL_FreeSurface(headerSurface);
     }
 
-    // Render only top 3 high scores
-    int yOffset = 80;
+    // Render scores
     int count = 0;
-    for (const auto& score : highScores) {
-        if (count >= 3) break; // Only show top 3
-        
-        std::stringstream ss;
-        ss << (count + 1) << ". " << score.name << " [Score: " << std::fixed << std::setprecision(1) << score.score << "]";
-        SDL_Surface* textSurface = TTF_RenderText_Solid(smallFont, ss.str().c_str(), color);
-        if (textSurface) {
-            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-            SDL_Rect textRect = {10, yOffset, textSurface->w, textSurface->h};
-            SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-            SDL_DestroyTexture(textTexture);
-            SDL_FreeSurface(textSurface);
-            yOffset += 30;
-            count++;
+    displayScoresDescending(scoreRoot, count);
+    
+    // If no scores are displayed, show a message
+    if (count == 0) {
+        SDL_Surface* noScoresSurface = TTF_RenderText_Solid(smallFont, "No high scores yet!", color);
+        if (noScoresSurface) {
+            SDL_Texture* noScoresTexture = SDL_CreateTextureFromSurface(renderer, noScoresSurface);
+            SDL_Rect noScoresRect = {10, 80, noScoresSurface->w, noScoresSurface->h};
+            SDL_RenderCopy(renderer, noScoresTexture, NULL, &noScoresRect);
+            SDL_DestroyTexture(noScoresTexture);
+            SDL_FreeSurface(noScoresSurface);
         }
     }
 }
@@ -748,6 +785,36 @@ void Game::updateEnemies(float deltaTime) {
         if (e.x > winW - e.spriteW) { e.x = winW - e.spriteW; e.vx = -e.vx; }
         if (e.y < 0) { e.y = 0; e.vy = -e.vy; }
         if (e.y > winH - e.spriteH) { e.y = winH - e.spriteH; e.vy = -e.vy; }
+        // Check collision with projectiles
+        bool destroyed = false;
+        for (int i = 0; i < MAX_PROJECTILES; i++) {
+            if (projectiles[i].active) {
+                SDL_Rect projRect = {static_cast<int>(projectiles[i].x - 16), static_cast<int>(projectiles[i].y - 64), 32, 128};
+                SDL_Rect minionRect = {static_cast<int>(e.x), static_cast<int>(e.y), 45, 66};
+                if (SDL_HasIntersection(&projRect, &minionRect)) {
+                    projectiles[i].active = false;
+                    score += 50;
+                    destroyed = true;
+                    break;
+                }
+            }
+        }
+        if (destroyed) {
+            // Remove minion from queue
+            if (prev) {
+                prev->next = curr->next;
+                if (curr == enemyQueue.tail) enemyQueue.tail = prev;
+                delete curr;
+                curr = prev->next;
+            } else {
+                enemyQueue.head = curr->next;
+                if (curr == enemyQueue.tail) enemyQueue.tail = nullptr;
+                delete curr;
+                curr = enemyQueue.head;
+            }
+            enemyQueue.size--;
+            continue;
+        }
         prev = curr;
         curr = curr->next;
         e.frameTimer += deltaTime;
@@ -832,4 +899,118 @@ void Game::clean() {
         minionTexture = nullptr;
     }
     clearEnemies();
+}
+
+void Game::insertScore(ScoreNode*& root, const std::string& name, int score) {
+    if (!root) {
+        root = new ScoreNode(name, score);
+        return;
+    }
+    if (score > root->score) {
+        insertScore(root->left, name, score);
+    } else {
+        insertScore(root->right, name, score);
+    }
+}
+
+void Game::displayScoresDescending(ScoreNode* root, int& count) {
+    if (!root || count >= 3) return;
+    
+    // First traverse the left subtree (higher scores)
+    displayScoresDescending(root->left, count);
+    
+    // Then display the current node if we haven't shown 3 scores yet
+    if (count < 3) {
+        SDL_Color color = {255, 255, 255, 255};
+        std::stringstream ss;
+        ss << (count + 1) << ". " << root->name << " [Score: " << root->score << "]";
+        SDL_Surface* textSurface = TTF_RenderText_Solid(smallFont, ss.str().c_str(), color);
+        if (textSurface) {
+            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+            SDL_Rect textRect = {10, 80 + count * 30, textSurface->w, textSurface->h};
+            SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+            SDL_DestroyTexture(textTexture);
+            SDL_FreeSurface(textSurface);
+        }
+        count++;
+    }
+    
+    // Finally traverse the right subtree (lower scores)
+    displayScoresDescending(root->right, count);
+}
+
+void Game::clearScoreTree(ScoreNode* root) {
+    if (!root) return;
+    clearScoreTree(root->left);
+    clearScoreTree(root->right);
+    delete root;
+}
+
+void Game::saveBSTToFile(const std::string& filename) {
+    std::string fullPath = "/Users/tatelgabrielle/Desktop/C++/FINAL-SOURCE-FILE/FINAL-SOURCE-FILE/" + filename;
+    std::cout << "Attempting to save scores to file: " << fullPath << std::endl;
+    
+    // Create file if it doesn't exist
+    std::ofstream file(fullPath, std::ios::out | std::ios::app);
+    if (!file.is_open()) {
+        std::cout << "Failed to open file for writing: " << fullPath << std::endl;
+        std::cout << "Error: " << strerror(errno) << std::endl;
+        return;
+    }
+    
+    // Clear the file contents before writing
+    file.close();
+    file.open(fullPath, std::ios::out | std::ios::trunc);
+    
+    // Save in descending order
+    std::function<void(ScoreNode*)> save = [&](ScoreNode* node) {
+        if (!node) return;
+        save(node->left);
+        file << node->name << " " << node->score << "\n";
+        std::cout << "Saving score: " << node->name << " " << node->score << std::endl;
+        save(node->right);
+    };
+    save(scoreRoot);
+    file.close();
+    std::cout << "Finished saving scores to file" << std::endl;
+}
+
+void Game::loadBSTFromFile(const std::string& filename) {
+    std::string fullPath = "/Users/tatelgabrielle/Desktop/C++/FINAL-SOURCE-FILE/FINAL-SOURCE-FILE/" + filename;
+    std::cout << "Attempting to load scores from file: " << fullPath << std::endl;
+    
+    clearScoreTree(scoreRoot);
+    scoreRoot = nullptr;
+    
+    std::ifstream file(fullPath);
+    if (!file.is_open()) {
+        std::cout << "Failed to open file for reading: " << fullPath << std::endl;
+        std::cout << "Error: " << strerror(errno) << std::endl;
+        return;
+    }
+    
+    std::string name;
+    int scoreVal;
+    while (file >> name >> scoreVal) {
+        std::cout << "Loading score: " << name << " " << scoreVal << std::endl;
+        insertScore(scoreRoot, name, scoreVal);
+    }
+    file.close();
+    std::cout << "Finished loading scores from file" << std::endl;
+}
+
+int Game::countNodes(ScoreNode* root) {
+    if (!root) return 0;
+    return 1 + countNodes(root->left) + countNodes(root->right);
+}
+
+void Game::removeLowestScore(ScoreNode*& root) {
+    if (!root) return;
+    if (!root->right) {
+        ScoreNode* temp = root;
+        root = root->left;
+        delete temp;
+    } else {
+        removeLowestScore(root->right);
+    }
 }
