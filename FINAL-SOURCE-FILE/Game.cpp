@@ -8,6 +8,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <random>
 
 using namespace std;
 
@@ -44,6 +45,11 @@ Game::Game() {
     isEnteringName = false;
     inputText = "";
     loadHighScores();
+
+    // Initialize enemies
+    minionTexture = nullptr;
+    enemySpawnTimer = 0.0f;
+    enemyQueue = EnemyQueue();
 }
 
 Game::~Game() {}
@@ -143,6 +149,18 @@ void Game::init(const char* title, int xpos, int ypos, int width, int height, bo
         }
     }
 
+    // Load minion sprite
+    SDL_Surface* minionSurface = IMG_Load("/Users/tatelgabrielle/Desktop/C++/FINAL-SOURCE-FILE/FINAL-SOURCE-FILE/assets/monsters/minions.png");
+    if (!minionSurface) {
+        cout << "Failed to load minion sprite: " << IMG_GetError() << endl;
+    } else {
+        SDL_SetColorKey(minionSurface, SDL_TRUE, SDL_MapRGB(minionSurface->format, 0, 0, 0));
+        minionTexture = SDL_CreateTextureFromSurface(renderer, minionSurface);
+        SDL_FreeSurface(minionSurface);
+        if (!minionTexture) {
+            cout << "Failed to create minion texture: " << SDL_GetError() << endl;
+        }
+    }
 }
 
 void Game::handleEvents() {
@@ -271,6 +289,12 @@ void Game::handleEvents() {
 }
 
 void Game::update() {
+    // Calculate delta time
+    static auto lastTime = std::chrono::high_resolution_clock::now();
+    auto now = std::chrono::high_resolution_clock::now();
+    float deltaTime = std::chrono::duration<float>(now - lastTime).count();
+    lastTime = now;
+
     if (currentState == GameState::PLAYING) {
         // Update timer
         if (timerStarted) {
@@ -334,6 +358,14 @@ void Game::update() {
             projectileCount = MAX_PROJECTILES;
             canFire = true;
         }
+
+        // Enemy spawn logic
+        enemySpawnTimer += deltaTime;
+        if (enemySpawnTimer >= ENEMY_SPAWN_INTERVAL) {
+            spawnEnemy();
+            enemySpawnTimer = 0.0f;
+        }
+        updateEnemies(deltaTime);
     }
 }
 
@@ -472,6 +504,11 @@ void Game::render() {
     if (currentState == GameState::ENTER_NAME) {
         renderNameInput();
     }
+
+    // Render enemies
+    if (currentState == GameState::PLAYING) {
+        renderEnemies();
+    }
     
     SDL_RenderPresent(renderer);
 }
@@ -541,7 +578,8 @@ void Game::renderGameOver() {
     if (!font) return;
 
     SDL_Color color = {255, 0, 0, 255};
-    SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Game Over", color);
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Game Over hit enter", color);
+    
     if (textSurface) {
         int winW, winH;
         SDL_GetWindowSize(window, &winW, &winH);
@@ -663,6 +701,88 @@ void Game::saveHighScores() {
     }
 }
 
+void Game::spawnEnemy() {
+    if (enemyQueue.size >= MAX_ENEMIES) return;
+    int winW, winH;
+    SDL_GetWindowSize(window, &winW, &winH);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> xDist(0, winW - 32);
+    std::uniform_real_distribution<float> yDist(0, winH / 2);
+    std::uniform_real_distribution<float> vDist(-0.5f, 0.5f);
+    Enemy enemy;
+    enemy.x = xDist(gen);
+    enemy.y = yDist(gen);
+    enemy.vx = vDist(gen);
+    enemy.vy = vDist(gen);
+    if (enemy.vx == 0 && enemy.vy == 0) enemy.vx = 1.0f;
+    enemy.frame = rand() % 40; // Start at a random frame
+    enemy.frameCount = 40;   // 8 columns x 5 rows = 40 frames
+    enemy.frameTime = 0.25f; // slower animation
+    enemy.frameTimer = 0.0f;
+    enemy.spriteW = 23; // use 23 for all columns to avoid cropping
+    enemy.spriteH = 66;
+    enemy.frameCount = 12;
+    enemy.frameTime = 0.15f;
+    EnemyNode* node = new EnemyNode{enemy, nullptr};
+    if (!enemyQueue.tail) {
+        enemyQueue.head = enemyQueue.tail = node;
+    } else {
+        enemyQueue.tail->next = node;
+        enemyQueue.tail = node;
+    }
+    enemyQueue.size++;
+}
+
+void Game::updateEnemies(float deltaTime) {
+    EnemyNode* prev = nullptr;
+    EnemyNode* curr = enemyQueue.head;
+    int winW, winH;
+    SDL_GetWindowSize(window, &winW, &winH);
+    while (curr) {
+        Enemy& e = curr->enemy;
+        e.x += e.vx;
+        e.y += e.vy;
+        // Bounce off edges
+        if (e.x < 0) { e.x = 0; e.vx = -e.vx; }
+        if (e.x > winW - e.spriteW) { e.x = winW - e.spriteW; e.vx = -e.vx; }
+        if (e.y < 0) { e.y = 0; e.vy = -e.vy; }
+        if (e.y > winH - e.spriteH) { e.y = winH - e.spriteH; e.vy = -e.vy; }
+        prev = curr;
+        curr = curr->next;
+        e.frameTimer += deltaTime;
+        if (e.frameTimer >= e.frameTime) {
+            e.frame = (e.frame + 1) % 6; // 3 columns x 2 rows = 6 frames
+            e.frameTimer = 0.0f;
+        }
+    }
+}
+
+void Game::renderEnemies() {
+    if (!minionTexture) return;
+    EnemyNode* curr = enemyQueue.head;
+    while (curr) {
+        Enemy& e = curr->enemy;
+        const int framesPerRow = 3;
+        int frameX = e.frame % framesPerRow;
+        int frameY = e.frame / framesPerRow;
+        SDL_Rect srcRect = {frameX * 45, frameY * 66, 45, 66};
+        SDL_Rect destRect = {static_cast<int>(e.x), static_cast<int>(e.y), 60, 100}; // 2x scale
+        SDL_RenderCopy(renderer, minionTexture, &srcRect, &destRect);
+        curr = curr->next;
+    }
+}
+
+void Game::clearEnemies() {
+    EnemyNode* curr = enemyQueue.head;
+    while (curr) {
+        EnemyNode* next = curr->next;
+        delete curr;
+        curr = next;
+    }
+    enemyQueue.head = enemyQueue.tail = nullptr;
+    enemyQueue.size = 0;
+}
 
 void Game::clean() {
     SDL_DestroyWindow(window);
@@ -706,4 +826,10 @@ void Game::clean() {
         SDL_DestroyTexture(beamTexture);
         beamTexture = nullptr;
     }
+
+    if (minionTexture) {
+        SDL_DestroyTexture(minionTexture);
+        minionTexture = nullptr;
+    }
+    clearEnemies();
 }
