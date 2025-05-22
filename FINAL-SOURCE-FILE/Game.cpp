@@ -2,7 +2,12 @@
 #include <iostream>
 #include <SDL_image.h>
 #include <unistd.h>
-#include <SDL_ttf.h> 
+#include <SDL_ttf.h>
+#include <cmath>
+#include <chrono>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
 
 using namespace std;
 
@@ -13,6 +18,7 @@ Game::Game() {
     
     //For initializing the font and current state
     font = nullptr;
+    smallFont = nullptr;
     currentState = GameState::MENU;
     
     //For initializing the space ship sprite variable
@@ -29,12 +35,23 @@ Game::Game() {
     for (int i = 0; i < MAX_PROJECTILES; i++) {
         projectiles[i].active = false;
     }
+    
+    // Initialize timer
+    remainingTime = GAME_DURATION;
+    timerStarted = false;
+
+    // Initialize high scores
+    isEnteringName = false;
+    inputText = "";
+    loadHighScores();
 }
 
 Game::~Game() {}
 
 void Game::init(const char* title, int xpos, int ypos, int width, int height, bool fullscreen) {
     int flags = 0;
+    
+    //Initialize window
     if (fullscreen) {
         flags = SDL_WINDOW_FULLSCREEN;
     }
@@ -78,6 +95,12 @@ void Game::init(const char* title, int xpos, int ypos, int width, int height, bo
 
     if (!font) {
         cout << "Failed to load font " << TTF_GetError() << endl;
+    }
+    
+    // Initialize small font for UI elements
+    smallFont = TTF_OpenFont("/Users/tatelgabrielle/Desktop/C++/FINAL-SOURCE-FILE/FINAL-SOURCE-FILE/assets/fonts/ByteBounce.ttf", 24);
+    if (!smallFont) {
+        cout << "Failed to load small font " << TTF_GetError() << endl;
     }
     
     // Load space ship sprite
@@ -132,9 +155,43 @@ void Game::handleEvents() {
         if (currentState == GameState::MENU) {
             if (event.type == SDL_MOUSEBUTTONDOWN || (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN)) {
                 currentState = GameState::PLAYING;
+                remainingTime = GAME_DURATION;
+                timerStarted = true;
+                gameStartTime = std::chrono::high_resolution_clock::now();
                 cout << "Game Started! " << endl;
             }
+        } else if (currentState == GameState::GAME_OVER) {
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN) {
+                currentState = GameState::ENTER_NAME;
+                isEnteringName = true;
+                inputText = "";
+                SDL_StartTextInput(); // Enable text input
+            }
+        } else if (currentState == GameState::ENTER_NAME) {
+            if (event.type == SDL_KEYDOWN) {
+                if (event.key.keysym.sym == SDLK_RETURN && !inputText.empty()) {
+                    // Save the score
+                    HighScore newScore = {inputText, GAME_DURATION - remainingTime};
+                    highScores.push_back(newScore);
+                    saveHighScores();
+                    currentState = GameState::MENU;
+                    isEnteringName = false;
+                    SDL_StopTextInput(); // Disable text input
+                }
+                else if (event.key.keysym.sym == SDLK_BACKSPACE && !inputText.empty()) {
+                    inputText.pop_back();
+                }
+                else if (event.key.keysym.sym == SDLK_ESCAPE) {
+                    currentState = GameState::MENU;
+                    isEnteringName = false;
+                    SDL_StopTextInput(); // Disable text input
+                }
+            }
+            else if (event.type == SDL_TEXTINPUT && inputText.length() < MAX_NAME_LENGTH) {
+                inputText += event.text.text;
+            }
         }
+        
         
         // Handle cursor movement in PLAYING state
         if (currentState == GameState::PLAYING) {
@@ -215,6 +272,18 @@ void Game::handleEvents() {
 
 void Game::update() {
     if (currentState == GameState::PLAYING) {
+        // Update timer
+        if (timerStarted) {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - gameStartTime).count() / 1000.0f;
+            remainingTime = GAME_DURATION - elapsed;
+            
+            if (remainingTime <= 0) {
+                currentState = GameState::GAME_OVER;
+                timerStarted = false;
+            }
+        }
+
         // Update cursor position
         cursorX += cursorVelX;
         cursorY += cursorVelY;
@@ -240,7 +309,7 @@ void Game::update() {
         // Adjust angle to match sprite's default orientation
         spaceshipAngle += 90.0;
 
-        // Update projectiles || PORJECTILE FIRING SYSTEM 
+        // Update projectiles
         bool allProjectilesOffScreen = true;
         for (int i = 0; i < MAX_PROJECTILES; i++) {
             if (projectiles[i].active) {
@@ -386,8 +455,214 @@ void Game::render() {
         }
     }
     
+    // Render timer bar
+    if (currentState == GameState::PLAYING) {
+        renderTimerBar();
+    }
+
+    // Render high scores
+    renderHighScores();
+
+    // Render game over
+    if (currentState == GameState::GAME_OVER) {
+        renderGameOver();
+    }
+
+    // Render name input
+    if (currentState == GameState::ENTER_NAME) {
+        renderNameInput();
+    }
+    
     SDL_RenderPresent(renderer);
 }
+
+void Game::renderTimerBar() {
+    int winW, winH;
+    SDL_GetWindowSize(window, &winW, &winH);
+
+    // Draw background bar
+    SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+    SDL_Rect bgRect = {
+        TIMER_BAR_PADDING,
+        TIMER_BAR_PADDING,
+        winW - (2 * TIMER_BAR_PADDING),
+        TIMER_BAR_HEIGHT
+    };
+    SDL_RenderFillRect(renderer, &bgRect);
+
+    // Draw remaining time bar
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    SDL_Rect timeRect = {
+        TIMER_BAR_PADDING,
+        TIMER_BAR_PADDING,
+        static_cast<int>((winW - (2 * TIMER_BAR_PADDING)) * (remainingTime / GAME_DURATION)),
+        TIMER_BAR_HEIGHT
+    };
+    SDL_RenderFillRect(renderer, &timeRect);
+}
+
+void Game::renderHighScores() {
+    if (!smallFont) return;
+
+    SDL_Color color = {255, 255, 255, 255};
+    
+    // Render "Top Scores" header
+    SDL_Surface* headerSurface = TTF_RenderText_Solid(smallFont, "Top 3 Scores", color);
+    if (headerSurface) {
+        SDL_Texture* headerTexture = SDL_CreateTextureFromSurface(renderer, headerSurface);
+        SDL_Rect headerRect = {10, 50, headerSurface->w, headerSurface->h};
+        SDL_RenderCopy(renderer, headerTexture, NULL, &headerRect);
+        SDL_DestroyTexture(headerTexture);
+        SDL_FreeSurface(headerSurface);
+    }
+
+    // Render only top 3 high scores
+    int yOffset = 80;
+    int count = 0;
+    for (const auto& score : highScores) {
+        if (count >= 3) break; // Only show top 3
+        
+        std::stringstream ss;
+        ss << (count + 1) << ". " << score.name << " [Score: " << std::fixed << std::setprecision(1) << score.score << "]";
+        SDL_Surface* textSurface = TTF_RenderText_Solid(smallFont, ss.str().c_str(), color);
+        if (textSurface) {
+            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+            SDL_Rect textRect = {10, yOffset, textSurface->w, textSurface->h};
+            SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+            SDL_DestroyTexture(textTexture);
+            SDL_FreeSurface(textSurface);
+            yOffset += 30;
+            count++;
+        }
+    }
+}
+
+void Game::renderGameOver() {
+    if (!font) return;
+
+    SDL_Color color = {255, 0, 0, 255};
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Game Over", color);
+    if (textSurface) {
+        int winW, winH;
+        SDL_GetWindowSize(window, &winW, &winH);
+        SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        SDL_Rect textRect = {
+            (winW - textSurface->w) / 2,
+            (winH - textSurface->h) / 2,
+            textSurface->w,
+            textSurface->h
+        };
+        SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+        SDL_DestroyTexture(textTexture);
+        SDL_FreeSurface(textSurface);
+    }
+}
+
+void Game::renderNameInput() {
+    if (!smallFont) return;
+
+    int winW, winH;
+    SDL_GetWindowSize(window, &winW, &winH);
+
+    // Render background box
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
+    SDL_Rect bgRect = {
+        winW/4,
+        winH/2 - 50,
+        winW/2,
+        100
+    };
+    SDL_RenderFillRect(renderer, &bgRect);
+
+    // Render border
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(renderer, &bgRect);
+
+    // Render prompt
+    SDL_Color color = {255, 255, 255, 255};
+    std::string prompt = "Enter your name: " + inputText;
+    
+    // Add blinking cursor
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime.time_since_epoch()).count();
+    if ((elapsed / 500) % 2 == 0) {
+        prompt += "|";
+    }
+    
+    SDL_Surface* textSurface = TTF_RenderText_Solid(smallFont, prompt.c_str(), color);
+    if (textSurface) {
+        SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        SDL_Rect textRect = {
+            (winW - textSurface->w) / 2,
+            (winH - textSurface->h) / 2,
+            textSurface->w,
+            textSurface->h
+        };
+        SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+        SDL_DestroyTexture(textTexture);
+        SDL_FreeSurface(textSurface);
+    }
+
+    // Render instructions
+    std::string instructions = "Press ENTER to confirm or ESC to cancel";
+    SDL_Surface* instrSurface = TTF_RenderText_Solid(smallFont, instructions.c_str(), color);
+    if (instrSurface) {
+        SDL_Texture* instrTexture = SDL_CreateTextureFromSurface(renderer, instrSurface);
+        SDL_Rect instrRect = {
+            (winW - instrSurface->w) / 2,
+            (winH - instrSurface->h) / 2 + 40,
+            instrSurface->w,
+            instrSurface->h
+        };
+        SDL_RenderCopy(renderer, instrTexture, NULL, &instrRect);
+        SDL_DestroyTexture(instrTexture);
+        SDL_FreeSurface(instrSurface);
+    }
+}
+
+void Game::loadHighScores() {
+    std::ifstream file("highscores.txt");
+    if (file.is_open()) {
+        highScores.clear();
+        std::string name;
+        float score;
+        while (file >> name >> score) {
+            highScores.push_back({name, score});
+        }
+        file.close();
+        
+        // Sort and keep only top 3 scores
+        std::sort(highScores.begin(), highScores.end(), 
+            [](const HighScore& a, const HighScore& b) {
+                return a.score > b.score;
+            });
+        if (highScores.size() > 3) {
+            highScores.resize(3);
+        }
+    }
+}
+
+void Game::saveHighScores() {
+    // Sort scores in descending order
+    std::sort(highScores.begin(), highScores.end(), 
+        [](const HighScore& a, const HighScore& b) {
+            return a.score > b.score;
+        });
+    
+    // Keep only top 3 scores
+    if (highScores.size() > 3) {
+        highScores.resize(3);
+    }
+    
+    std::ofstream file("highscores.txt");
+    if (file.is_open()) {
+        for (const auto& score : highScores) {
+            file << score.name << " " << score.score << "\n";
+        }
+        file.close();
+    }
+}
+
 
 void Game::clean() {
     SDL_DestroyWindow(window);
@@ -400,6 +675,11 @@ void Game::clean() {
     if (font) {
         TTF_CloseFont(font);
         font = nullptr;
+    }
+
+    if (smallFont) {
+        TTF_CloseFont(smallFont);
+        smallFont = nullptr;
     }
 
     TTF_Quit();
@@ -420,11 +700,10 @@ void Game::clean() {
       SDL_DestroyTexture(cursorTexture);
       cursorTexture = nullptr;
     }
-    
+
     // Clean beam texture
     if (beamTexture) {
         SDL_DestroyTexture(beamTexture);
         beamTexture = nullptr;
     }
 }
-

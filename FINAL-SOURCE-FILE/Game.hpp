@@ -1,15 +1,26 @@
-
 #ifndef Game_hpp
 #define Game_hpp
 
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <iostream>
+#include <chrono>
+#include <vector>
+#include <string>
+#include <fstream>
 
 enum class GameState {
     MENU,
-    PLAYING
-}; 
+    PLAYING,
+    GAME_OVER,
+    ENTER_NAME
+};
+
+struct HighScore {
+    std::string name;
+    float score;
+};
+
 
 class Game {
 public:
@@ -34,6 +45,7 @@ private:
     
     //Game text variable
     TTF_Font* font;
+    TTF_Font* smallFont; // For high scores display
     
     //current state variable
     GameState currentState;
@@ -66,6 +78,31 @@ private:
     bool canFire;
     float lastFireTime;
     static constexpr float FIRE_COOLDOWN = 0.5f; // Cooldown between shots in seconds
+    
+    // Timer system
+    static constexpr float GAME_DURATION = 5.0f; // 30 seconds game duration
+    float remainingTime;
+    std::chrono::time_point<std::chrono::high_resolution_clock> gameStartTime;
+    bool timerStarted;
+    
+    // Timer bar dimensions
+    static constexpr int TIMER_BAR_HEIGHT = 10;
+    static constexpr int TIMER_BAR_PADDING = 5;
+
+    // High scores system
+    std::vector<HighScore> highScores;
+    std::string currentPlayerName;
+    bool isEnteringName;
+    std::string inputText;
+    static constexpr int MAX_NAME_LENGTH = 20;
+    
+    // Helper functions
+    void loadHighScores();
+    void saveHighScores();
+    void renderHighScores();
+    void renderTimerBar();
+    void renderGameOver();
+    void renderNameInput();
     
 };
 
