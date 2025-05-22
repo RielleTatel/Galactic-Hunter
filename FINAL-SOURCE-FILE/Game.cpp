@@ -133,6 +133,8 @@ void Game::handleEvents() {
                         break;
                 }
             }
+            
+            // Handle cursor movement in PLAYING state
             if (event.type == SDL_KEYUP) {
                 switch (event.key.keysym.sym) {
                     case SDLK_LEFT:
@@ -158,16 +160,27 @@ void Game::update() {
         // Update cursor position
         cursorX += cursorVelX;
         cursorY += cursorVelY;
-        
-        // Get window dimensions
+        // Clamp cursor position to window bounds
         int winW, winH;
         SDL_GetWindowSize(window, &winW, &winH);
-        
-        // Keep cursor within window bounds
         if (cursorX < 0) cursorX = 0;
         if (cursorY < 0) cursorY = 0;
-        if (cursorX > winW - 32) cursorX = winW - 32;  // 32 is cursor width
-        if (cursorY > winH - 32) cursorY = winH - 32;  // 32 is cursor height
+        if (cursorX > winW - 32) cursorX = winW - 32;
+        if (cursorY > winH - 32) cursorY = winH - 32;
+
+        // Calculate angle between spaceship and cursor
+        int spriteW = 68;
+        int spriteH = 68;
+        float spaceshipX = (winW - spriteW) / 2.0f;
+        float spaceshipY = winH - spriteH - 10.0f;
+        
+        // Calculate angle in radians
+        float dx = cursorX - spaceshipX;
+        float dy = cursorY - spaceshipY;
+        
+        spaceshipAngle = atan2(dy, dx) * 180.0 / M_PI;
+        // Adjust angle to match sprite's default orientation
+        spaceshipAngle += 90.0;
     }
 }
 
@@ -225,21 +238,25 @@ void Game::render() {
     
     
     //RENDER PlAYER SPRITE || SPACE SHIP
-      if (currentState == GameState::PLAYING && playerTexture) {
-      int winW, winH;
-      SDL_GetWindowSize(window, &winW, &winH);
+    if (currentState == GameState::PLAYING && playerTexture) {
+        int winW, winH;
+        SDL_GetWindowSize(window, &winW, &winH);
 
-      int spriteW = 68; // width of your sprite
-      int spriteH = 68; // height of your sprite
+        int spriteW = 68; // width of your sprite
+        int spriteH = 68; // height of your sprite
 
-      SDL_Rect destRect;
-      destRect.w = spriteW;
-      destRect.h = spriteH;
-      destRect.x = (winW - spriteW) / 2;
-      destRect.y = winH - spriteH - 10; // 10px from bottom
+        SDL_Rect destRect;
+        destRect.w = spriteW;
+        destRect.h = spriteH;
+        destRect.x = (winW - spriteW) / 2;
+        destRect.y = winH - spriteH - 10; // 10px from bottom
 
-      SDL_RenderCopy(renderer, playerTexture, NULL, &destRect);
-  }
+        // Create a point for rotation center
+        SDL_Point center = {spriteW / 2, spriteH / 2};
+        
+        // Render the spaceship with rotation
+        SDL_RenderCopyEx(renderer, playerTexture, NULL, &destRect, spaceshipAngle, &center, SDL_FLIP_NONE);
+    }
 
   //RENDER CURSOR SPRITE
   if (currentState == GameState::PLAYING && cursorTexture) {

@@ -49,6 +49,9 @@ private:
         float cursorY = 0.0f;
         float cursorVelX = 0.0f;
         float cursorVelY = 0.0f;
+    
+    // Spaceship rotation angle
+    double spaceshipAngle = 0.0;
 };
 
 #endif
