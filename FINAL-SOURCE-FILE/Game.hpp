@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <random>
 
 enum class GameState {
     MENU,
@@ -21,6 +22,27 @@ struct HighScore {
     float score;
 };
 
+struct Enemy {
+    float x, y;
+    float vx, vy;
+    int frame;
+    int frameCount;
+    float frameTime;
+    float frameTimer;
+    int spriteW, spriteH;
+};
+
+struct EnemyNode {
+    Enemy enemy;
+    EnemyNode* next;
+};
+
+struct EnemyQueue {
+    EnemyNode* head;
+    EnemyNode* tail;
+    int size;
+    EnemyQueue() : head(nullptr), tail(nullptr), size(0) {}
+};
 
 class Game {
 public:
@@ -80,7 +102,7 @@ private:
     static constexpr float FIRE_COOLDOWN = 0.5f; // Cooldown between shots in seconds
     
     // Timer system
-    static constexpr float GAME_DURATION = 5.0f; // 30 seconds game duration
+    static constexpr float GAME_DURATION = 30.0f; // 30 seconds game duration
     float remainingTime;
     std::chrono::time_point<std::chrono::high_resolution_clock> gameStartTime;
     bool timerStarted;
@@ -104,6 +126,15 @@ private:
     void renderGameOver();
     void renderNameInput();
     
+    SDL_Texture* minionTexture;
+    EnemyQueue enemyQueue;
+    float enemySpawnTimer;
+    static constexpr int MAX_ENEMIES = 10;
+    static constexpr float ENEMY_SPAWN_INTERVAL = 1.5f;
+    void spawnEnemy();
+    void updateEnemies(float deltaTime);
+    void renderEnemies();
+    void clearEnemies();
 };
 
 #endif
