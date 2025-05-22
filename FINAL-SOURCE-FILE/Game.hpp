@@ -52,6 +52,21 @@ private:
     
     // Spaceship rotation angle
     double spaceshipAngle = 0.0;
+    
+    // Projectile system
+    static const int MAX_PROJECTILES = 3;
+    struct Projectile {
+        float x, y;
+        float angle;
+        bool active;
+    };
+    Projectile projectiles[MAX_PROJECTILES];
+    int projectileCount;
+    SDL_Texture* beamTexture;
+    bool canFire;
+    float lastFireTime;
+    static constexpr float FIRE_COOLDOWN = 0.5f; // Cooldown between shots in seconds
+    
 };
 
 #endif

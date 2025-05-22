@@ -20,6 +20,15 @@ Game::Game() {
     
     //For initializing the cursor sprite variable
     cursorTexture = nullptr;
+    
+    // Initialize projectile system
+    beamTexture = nullptr;
+    projectileCount = MAX_PROJECTILES;
+    canFire = true;
+    lastFireTime = 0.0f;
+    for (int i = 0; i < MAX_PROJECTILES; i++) {
+        projectiles[i].active = false;
+    }
 }
 
 Game::~Game() {}
@@ -96,8 +105,21 @@ void Game::init(const char* title, int xpos, int ypos, int width, int height, bo
             cursorY = (winH - 32) / 2.0f;
             cursorVelX = 0.0f;
             cursorVelY = 0.0f;
-
     
+    // Load beam texture
+    SDL_Surface* beamSurface = IMG_Load("/Users/tatelgabrielle/Desktop/C++/FINAL-SOURCE-FILE/FINAL-SOURCE-FILE/assets/sprites/beams.png");
+    if (!beamSurface) {
+        cout << "Failed to load beam sprite: " << IMG_GetError() << endl;
+    } else {
+        // Set color key for magenta background
+        SDL_SetColorKey(beamSurface, SDL_TRUE, SDL_MapRGB(beamSurface->format, 255, 0, 255));
+        beamTexture = SDL_CreateTextureFromSurface(renderer, beamSurface);
+        SDL_FreeSurface(beamSurface);
+        if (!beamTexture) {
+            cout << "Failed to create beam texture: " << SDL_GetError() << endl;
+        }
+    }
+
 }
 
 void Game::handleEvents() {
@@ -116,7 +138,7 @@ void Game::handleEvents() {
         
         // Handle cursor movement in PLAYING state
         if (currentState == GameState::PLAYING) {
-            const float speed = 0.9f; // Increased speed for better responsiveness
+            const float speed = 0.5f; // Increased speed for better responsiveness
             if (event.type == SDL_KEYDOWN) {
                 switch (event.key.keysym.sym) {
                     case SDLK_LEFT:
@@ -151,6 +173,42 @@ void Game::handleEvents() {
                         break;
                 }
             }
+            
+            
+            // Handle projectile firing
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
+                if (canFire && projectileCount > 0) {
+                    // Find first inactive projectile
+                    for (int i = 0; i < MAX_PROJECTILES; i++) {
+                        if (!projectiles[i].active) {
+                            // Get spaceship position
+                            int winW, winH;
+                            SDL_GetWindowSize(window, &winW, &winH);
+                            int spriteW = 68;
+                            int spriteH = 68;
+                            float spaceshipX = (winW - spriteW) / 2.0f;
+                            float spaceshipY = winH - spriteH - 10.0f;
+
+                            // Initialize projectile
+                            projectiles[i].x = spaceshipX + spriteW/2;
+                            projectiles[i].y = spaceshipY + spriteH/2;
+                            projectiles[i].angle = spaceshipAngle;
+                            projectiles[i].active = true;
+                            
+                            // Decrease projectile count
+                            projectileCount--;
+                            
+                            // If no projectiles left, disable firing
+                            if (projectileCount == 0) {
+                                canFire = false;
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                
+            }
         }
     }
 }
@@ -181,6 +239,32 @@ void Game::update() {
         spaceshipAngle = atan2(dy, dx) * 180.0 / M_PI;
         // Adjust angle to match sprite's default orientation
         spaceshipAngle += 90.0;
+
+        // Update projectiles || PORJECTILE FIRING SYSTEM 
+        bool allProjectilesOffScreen = true;
+        for (int i = 0; i < MAX_PROJECTILES; i++) {
+            if (projectiles[i].active) {
+                // Move projectile in its direction
+                float speed = 2.0f;
+                float radianAngle = (projectiles[i].angle - 90.0f) * M_PI / 180.0f;
+                projectiles[i].x += cos(radianAngle) * speed;
+                projectiles[i].y += sin(radianAngle) * speed;
+
+                // Check if projectile is off screen
+                if (projectiles[i].x < 0 || projectiles[i].x > winW ||
+                    projectiles[i].y < 0 || projectiles[i].y > winH) {
+                    projectiles[i].active = false;
+                } else {
+                    allProjectilesOffScreen = false;
+                }
+            }
+        }
+
+        // If all projectiles are off screen, replenish the stack
+        if (allProjectilesOffScreen && !canFire) {
+            projectileCount = MAX_PROJECTILES;
+            canFire = true;
+        }
     }
 }
 
@@ -280,6 +364,28 @@ void Game::render() {
     SDL_RenderCopy(renderer, cursorTexture, &srcRect, &destRect);
   }
     
+    // Render projectiles
+    if (currentState == GameState::PLAYING && beamTexture) {
+        for (int i = 0; i < MAX_PROJECTILES; i++) {
+            if (projectiles[i].active) {
+                // Source rectangle for the green beam
+                SDL_Rect srcRect = {0, 0, 32, 128}; // Adjust these values based on your sprite sheet
+                
+                // Destination rectangle
+                SDL_Rect destRect;
+                destRect.w = 32;
+                destRect.h = 128;
+                destRect.x = static_cast<int>(projectiles[i].x - destRect.w/2);
+                destRect.y = static_cast<int>(projectiles[i].y - destRect.h/2);
+
+                // Render the beam with rotation
+                SDL_Point center = {destRect.w/2, destRect.h/2};
+                SDL_RenderCopyEx(renderer, beamTexture, &srcRect, &destRect,
+                               projectiles[i].angle, &center, SDL_FLIP_NONE);
+            }
+        }
+    }
+    
     SDL_RenderPresent(renderer);
 }
 
@@ -313,6 +419,12 @@ void Game::clean() {
     if (cursorTexture) {
       SDL_DestroyTexture(cursorTexture);
       cursorTexture = nullptr;
+    }
+    
+    // Clean beam texture
+    if (beamTexture) {
+        SDL_DestroyTexture(beamTexture);
+        beamTexture = nullptr;
     }
 }
 
