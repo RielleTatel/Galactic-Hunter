@@ -31,6 +31,8 @@ struct Enemy {
     float frameTimer;
     int spriteW, spriteH;
     int health = 2; // Add health field, default 2 hits
+    int maxHealth = 2; // Add maxHealth field, default 2
+    bool isTimeBonus = false; // Add isTimeBonus field, default false
 };
 
 struct EnemyNode {
