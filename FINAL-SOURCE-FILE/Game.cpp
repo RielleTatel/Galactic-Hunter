@@ -747,6 +747,7 @@ void Game::spawnEnemy() {
     std::uniform_real_distribution<float> xDist(0, winW - 32);
     std::uniform_real_distribution<float> yDist(0, winH / 2);
     std::uniform_real_distribution<float> vDist(-0.5f, 0.5f);
+    std::uniform_real_distribution<float> bonusDist(0, 1);
     Enemy enemy;
     enemy.x = xDist(gen);
     enemy.y = yDist(gen);
@@ -762,6 +763,12 @@ void Game::spawnEnemy() {
     enemy.frameCount = 12;
     enemy.frameTime = 0.15f;
     enemy.health = 2; // Initialize health to 2
+    enemy.maxHealth = 2; // Default maxHealth
+    enemy.isTimeBonus = (bonusDist(gen) < 0.1); // 10% chance for time bonus sprite
+    if (score >= 600) {
+        enemy.health = 3;
+        enemy.maxHealth = 3;
+    }
     EnemyNode* node = new EnemyNode{enemy, nullptr};
     if (!enemyQueue.tail) {
         enemyQueue.head = enemyQueue.tail = node;
@@ -797,6 +804,9 @@ void Game::updateEnemies(float deltaTime) {
                     if (e.health > 1) {
                         e.health--;
                     } else {
+                        if (e.isTimeBonus) {
+                            remainingTime += 4.0f; // Add 4 seconds for time bonus sprite
+                        }
                         score += 50;
                         destroyed = true;
                     }
@@ -851,13 +861,18 @@ void Game::renderEnemies() {
         SDL_Rect bgRect = {barX, barY, barWidth, barHeight};
         SDL_RenderFillRect(renderer, &bgRect);
         // Health (green or red)
-        int healthWidth = (e.health * barWidth) / 2; // 2 = max health
-        SDL_SetRenderDrawColor(renderer, e.health == 2 ? 0 : 255, e.health == 2 ? 255 : 0, 0, 255); // green if full, red if 1
+        int healthWidth = (e.health * barWidth) / e.maxHealth; // Use maxHealth for scaling
+        SDL_SetRenderDrawColor(renderer, e.health == e.maxHealth ? 0 : 255, e.health == e.maxHealth ? 255 : 0, 0, 255); // green if full, red if not
         SDL_Rect healthRect = {barX, barY, healthWidth, barHeight};
         SDL_RenderFillRect(renderer, &healthRect);
         // Border (white)
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer, &bgRect);
+        // If time bonus sprite, draw a blue border
+        if (e.isTimeBonus) {
+            SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+            SDL_RenderDrawRect(renderer, &destRect);
+        }
         curr = curr->next;
     }
 }

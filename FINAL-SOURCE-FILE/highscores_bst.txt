@@ -1,3 +1,3 @@
 Lily 1400
-Gab 900
-Gab 650
+Gab 1000
+Tatel 1000
