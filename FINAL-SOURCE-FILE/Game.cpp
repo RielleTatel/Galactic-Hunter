@@ -761,6 +761,7 @@ void Game::spawnEnemy() {
     enemy.spriteH = 66;
     enemy.frameCount = 12;
     enemy.frameTime = 0.15f;
+    enemy.health = 2; // Initialize health to 2
     EnemyNode* node = new EnemyNode{enemy, nullptr};
     if (!enemyQueue.tail) {
         enemyQueue.head = enemyQueue.tail = node;
@@ -793,8 +794,12 @@ void Game::updateEnemies(float deltaTime) {
                 SDL_Rect minionRect = {static_cast<int>(e.x), static_cast<int>(e.y), 45, 66};
                 if (SDL_HasIntersection(&projRect, &minionRect)) {
                     projectiles[i].active = false;
-                    score += 50;
-                    destroyed = true;
+                    if (e.health > 1) {
+                        e.health--;
+                    } else {
+                        score += 50;
+                        destroyed = true;
+                    }
                     break;
                 }
             }
@@ -836,6 +841,23 @@ void Game::renderEnemies() {
         SDL_Rect srcRect = {frameX * 45, frameY * 66, 45, 66};
         SDL_Rect destRect = {static_cast<int>(e.x), static_cast<int>(e.y), 60, 100}; // 2x scale
         SDL_RenderCopy(renderer, minionTexture, &srcRect, &destRect);
+        // Draw health bar above minion
+        int barWidth = 60;
+        int barHeight = 8;
+        int barX = destRect.x;
+        int barY = destRect.y - barHeight - 4;
+        // Background (gray)
+        SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+        SDL_Rect bgRect = {barX, barY, barWidth, barHeight};
+        SDL_RenderFillRect(renderer, &bgRect);
+        // Health (green or red)
+        int healthWidth = (e.health * barWidth) / 2; // 2 = max health
+        SDL_SetRenderDrawColor(renderer, e.health == 2 ? 0 : 255, e.health == 2 ? 255 : 0, 0, 255); // green if full, red if 1
+        SDL_Rect healthRect = {barX, barY, healthWidth, barHeight};
+        SDL_RenderFillRect(renderer, &healthRect);
+        // Border (white)
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &bgRect);
         curr = curr->next;
     }
 }

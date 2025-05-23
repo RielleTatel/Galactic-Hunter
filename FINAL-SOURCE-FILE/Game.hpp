@@ -30,11 +30,12 @@ struct Enemy {
     float frameTime;
     float frameTimer;
     int spriteW, spriteH;
+    int health = 2; // Add health field, default 2 hits
 };
 
 struct EnemyNode {
     Enemy enemy;
-    EnemyNode* next;
+    EnemyNode* next;   
 };
 
 struct EnemyQueue {
